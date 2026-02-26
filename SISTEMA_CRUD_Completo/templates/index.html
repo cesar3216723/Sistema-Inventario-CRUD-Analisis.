@@ -1,0 +1,121 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card dashboard-filters">
+    <h2 class="filter-title">🔍 Filtrar Inventario</h2>
+    <div class="filters-grid">
+        <div class="filter-group" style="flex:2">
+            <label for="search_producto">Buscar Producto</label>
+            <input type="text" id="search_producto" placeholder="Ej: Laptop, Impresora…" oninput="filtrarTabla()">
+        </div>
+        <div class="filter-group">
+            <label for="filter_cat">Categoría</label>
+            <select id="filter_cat" onchange="filtrarTabla()">
+                <option value="">Todas</option>
+                {% for cat in categorias %}
+                <option value="{{ cat }}">{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="filter_tipo">Tipo Movimiento</label>
+            <select id="filter_tipo" onchange="filtrarTabla()">
+                <option value="">Todos</option>
+                {% for tipo in tipos %}
+                <option value="{{ tipo }}">{{ tipo }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group filter-actions">
+            <button class="btn btn-outline" onclick="limpiarFiltrosInv()">Limpiar</button>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="header-actions">
+        <h2>Inventario Actual <span id="count-badge" class="count-badge"></span></h2>
+        <a href="{{ url_for('create') }}" class="btn btn-primary">+ Nuevo Registro</a>
+    </div>
+
+    <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID Mov.</th>
+                    <th>Fecha</th>
+                    <th>Producto</th>
+                    <th>Categoría</th>
+                    <th>Tipo</th>
+                    <th>Cantidad</th>
+                    <th>Precio Uni.</th>
+                    <th>Vendedor</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="inventory-body">
+                {% for item in items %}
+                <tr
+                    data-producto="{{ item['Nombre_Producto']|lower }}"
+                    data-categoria="{{ item['Categoria'] }}"
+                    data-tipo="{{ item['Tipo_Movimiento'] }}"
+                >
+                    <td><strong>{{ item['ID_Movimiento'] }}</strong></td>
+                    <td>{{ item['Fecha'] }}</td>
+                    <td>{{ item['Nombre_Producto'] }}</td>
+                    <td>{{ item['Categoria'] }}</td>
+                    <td><span class="badge-tipo">{{ item['Tipo_Movimiento'] }}</span></td>
+                    <td>{{ item['Cantidad'] }}</td>
+                    <td>${{ "%.2f"|format(item['Precio_Unitario']|float if item['Precio_Unitario'] else 0) }}</td>
+                    <td>{{ item['Vendedor'] }}</td>
+                    <td class="action-btns">
+                        <a href="{{ url_for('edit', id_mov=item['ID_Movimiento']) }}" class="btn btn-primary" style="padding:6px 12px;font-size:0.8rem;">Editar</a>
+                        <form action="{{ url_for('delete', id_mov=item['ID_Movimiento']) }}" method="POST" style="margin:0;padding:0;display:inline;">
+                            <button type="submit" class="btn btn-danger" style="padding:6px 12px;font-size:0.8rem;" onclick="return confirm('¿Estás seguro de que deseas eliminar este registro?');">Eliminar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" style="text-align:center;padding:30px;color:var(--text-light);">No hay registros en el inventario.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function filtrarTabla() {
+    const searchText = document.getElementById('search_producto').value.toLowerCase();
+    const catFilter  = document.getElementById('filter_cat').value;
+    const tipoFilter = document.getElementById('filter_tipo').value;
+    const rows = document.querySelectorAll('#inventory-body tr[data-producto]');
+    let visible = 0;
+
+    rows.forEach(row => {
+        const matchSearch = !searchText || row.dataset.producto.includes(searchText);
+        const matchCat    = !catFilter  || row.dataset.categoria === catFilter;
+        const matchTipo   = !tipoFilter || row.dataset.tipo === tipoFilter;
+
+        if (matchSearch && matchCat && matchTipo) {
+            row.style.display = '';
+            visible++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    document.getElementById('count-badge').textContent = visible + ' de ' + rows.length;
+}
+
+function limpiarFiltrosInv() {
+    document.getElementById('search_producto').value = '';
+    document.getElementById('filter_cat').value = '';
+    document.getElementById('filter_tipo').value = '';
+    filtrarTabla();
+}
+
+document.addEventListener('DOMContentLoaded', filtrarTabla);
+</script>
+{% endblock %}

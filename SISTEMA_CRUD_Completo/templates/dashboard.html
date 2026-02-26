@@ -1,0 +1,260 @@
+{% extends 'layout.html' %}
+
+{% block title %}Dashboard de KPIs – Sistema Inventario{% endblock %}
+
+{% block content %}
+<!-- Filtros Globales -->
+<div class="card dashboard-filters" id="dashboard-filters">
+    <h2 class="filter-title">📊 Filtros del Dashboard</h2>
+    <div class="filters-grid">
+        <div class="filter-group">
+            <label for="fecha_inicio">Fecha Inicio</label>
+            <input type="date" id="fecha_inicio">
+        </div>
+        <div class="filter-group">
+            <label for="fecha_fin">Fecha Fin</label>
+            <input type="date" id="fecha_fin">
+        </div>
+        <div class="filter-group">
+            <label for="filter_categoria">Categoría</label>
+            <select id="filter_categoria">
+                <option value="">Todas</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="filter_vendedor">Vendedor</label>
+            <select id="filter_vendedor">
+                <option value="">Todos</option>
+            </select>
+        </div>
+        <div class="filter-group filter-actions">
+            <button class="btn btn-primary" id="btn-aplicar" onclick="cargarDashboard()">Aplicar Filtros</button>
+            <button class="btn btn-outline" id="btn-limpiar" onclick="limpiarFiltros()">Limpiar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Tarjetas KPI -->
+<div class="kpi-grid" id="kpi-grid">
+    <div class="kpi-card kpi-ingresos">
+        <div class="kpi-icon">💰</div>
+        <div class="kpi-info">
+            <span class="kpi-label">Ingresos Totales</span>
+            <span class="kpi-value" id="kpi-ingresos">$0.00</span>
+        </div>
+    </div>
+    <div class="kpi-card kpi-articulos">
+        <div class="kpi-icon">📦</div>
+        <div class="kpi-info">
+            <span class="kpi-label">Artículos Movidos</span>
+            <span class="kpi-value" id="kpi-articulos">0</span>
+        </div>
+    </div>
+    <div class="kpi-card kpi-transacciones">
+        <div class="kpi-icon">📋</div>
+        <div class="kpi-info">
+            <span class="kpi-label">Total Transacciones</span>
+            <span class="kpi-value" id="kpi-transacciones">0</span>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos -->
+<div class="charts-grid">
+    <div class="card chart-card">
+        <h3>Ingresos por Vendedor</h3>
+        <canvas id="chart-vendedor"></canvas>
+    </div>
+    <div class="card chart-card">
+        <h3>Top 5 Categorías Más Vendidas</h3>
+        <canvas id="chart-categorias"></canvas>
+    </div>
+</div>
+
+<div class="card chart-card chart-full">
+    <h3>Tendencia de Ingresos en el Tiempo</h3>
+    <canvas id="chart-tendencia"></canvas>
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+<script>
+// ---- Chart instances ----
+let chartVendedor = null;
+let chartCategorias = null;
+let chartTendencia = null;
+
+// ---- Paleta de colores premium ----
+const COLORS = [
+    'rgba(99, 102, 241, 0.85)',   // Indigo
+    'rgba(16, 185, 129, 0.85)',   // Emerald
+    'rgba(245, 158, 11, 0.85)',   // Amber
+    'rgba(239, 68, 68, 0.85)',    // Red
+    'rgba(139, 92, 246, 0.85)',   // Violet
+    'rgba(6, 182, 212, 0.85)',    // Cyan
+    'rgba(236, 72, 153, 0.85)',   // Pink
+];
+const BORDERS = COLORS.map(c => c.replace('0.85', '1'));
+
+// ---- Formatear moneda MXN ----
+function fmtMoney(v) {
+    return '$' + Number(v).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+// ---- Animación de conteo ----
+function animateValue(el, end, isMoney) {
+    const duration = 800;
+    const startTime = performance.now();
+    function step(now) {
+        const progress = Math.min((now - startTime) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const current = end * eased;
+        el.textContent = isMoney ? fmtMoney(current) : Math.round(current).toLocaleString('es-MX');
+        if (progress < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+}
+
+// ---- Poblar selects de filtro ----
+function poblarFiltros(filtros) {
+    const selCat = document.getElementById('filter_categoria');
+    const selVen = document.getElementById('filter_vendedor');
+    const curCat = selCat.value;
+    const curVen = selVen.value;
+    selCat.innerHTML = '<option value="">Todas</option>';
+    selVen.innerHTML = '<option value="">Todos</option>';
+    filtros.categorias.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        selCat.appendChild(opt);
+    });
+    filtros.vendedores.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = v;
+        selVen.appendChild(opt);
+    });
+    selCat.value = curCat;
+    selVen.value = curVen;
+}
+
+// ---- Cargar datos del API ----
+async function cargarDashboard() {
+    const params = new URLSearchParams();
+    const fi  = document.getElementById('fecha_inicio').value;
+    const ff  = document.getElementById('fecha_fin').value;
+    const cat = document.getElementById('filter_categoria').value;
+    const ven = document.getElementById('filter_vendedor').value;
+    if (fi)  params.set('fecha_inicio', fi);
+    if (ff)  params.set('fecha_fin', ff);
+    if (cat) params.set('categoria', cat);
+    if (ven) params.set('vendedor', ven);
+
+    const res  = await fetch('/api/dashboard?' + params.toString());
+    const data = await res.json();
+
+    // ---- KPIs ----
+    animateValue(document.getElementById('kpi-ingresos'), data.kpis.ingresos_totales, true);
+    animateValue(document.getElementById('kpi-articulos'), data.kpis.total_articulos, false);
+    animateValue(document.getElementById('kpi-transacciones'), data.kpis.total_transacciones, false);
+
+    // ---- Filtros ----
+    poblarFiltros(data.filtros);
+
+    // ---- Gráfico: Ingresos por Vendedor (barras) ----
+    if (chartVendedor) chartVendedor.destroy();
+    chartVendedor = new Chart(document.getElementById('chart-vendedor'), {
+        type: 'bar',
+        data: {
+            labels: data.ingresos_vendedor.map(d => d.vendedor),
+            datasets: [{
+                label: 'Ingresos ($)',
+                data: data.ingresos_vendedor.map(d => d.total),
+                backgroundColor: COLORS,
+                borderColor: BORDERS,
+                borderWidth: 2,
+                borderRadius: 8,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => fmtMoney(ctx.raw) } }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { callback: v => fmtMoney(v) }, grid: { color: 'rgba(0,0,0,0.06)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    // ---- Gráfico: Top 5 Categorías (donut) ----
+    if (chartCategorias) chartCategorias.destroy();
+    chartCategorias = new Chart(document.getElementById('chart-categorias'), {
+        type: 'doughnut',
+        data: {
+            labels: data.top_categorias.map(d => d.categoria),
+            datasets: [{
+                data: data.top_categorias.map(d => d.total),
+                backgroundColor: COLORS,
+                borderColor: '#ffffff',
+                borderWidth: 3,
+                hoverOffset: 12,
+            }]
+        },
+        options: {
+            responsive: true,
+            cutout: '55%',
+            plugins: {
+                legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyleWidth: 12 } }
+            }
+        }
+    });
+
+    // ---- Gráfico: Tendencia temporal (línea) ----
+    if (chartTendencia) chartTendencia.destroy();
+    chartTendencia = new Chart(document.getElementById('chart-tendencia'), {
+        type: 'line',
+        data: {
+            labels: data.tendencia.map(d => d.fecha),
+            datasets: [{
+                label: 'Ingresos ($)',
+                data: data.tendencia.map(d => d.total),
+                borderColor: 'rgba(99, 102, 241, 1)',
+                backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                fill: true,
+                tension: 0.35,
+                pointRadius: 4,
+                pointHoverRadius: 7,
+                pointBackgroundColor: '#ffffff',
+                pointBorderColor: 'rgba(99, 102, 241, 1)',
+                pointBorderWidth: 2,
+                borderWidth: 3,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => fmtMoney(ctx.raw) } }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { callback: v => fmtMoney(v) }, grid: { color: 'rgba(0,0,0,0.06)' } },
+                x: { grid: { display: false }, ticks: { maxRotation: 45 } }
+            }
+        }
+    });
+}
+
+function limpiarFiltros() {
+    document.getElementById('fecha_inicio').value = '';
+    document.getElementById('fecha_fin').value = '';
+    document.getElementById('filter_categoria').value = '';
+    document.getElementById('filter_vendedor').value = '';
+    cargarDashboard();
+}
+
+document.addEventListener('DOMContentLoaded', cargarDashboard);
+</script>
+{% endblock %}

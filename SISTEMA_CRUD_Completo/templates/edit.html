@@ -1,0 +1,53 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card">
+    <div class="header-actions">
+        <h2>Editar Registro: {{ item['ID_Movimiento'] }}</h2>
+        <a href="{{ url_for('index') }}" class="btn"
+            style="background-color: var(--border-color); color: var(--text-dark);">Volver</a>
+    </div>
+
+    <form method="POST">
+        <div class="form-group" style="opacity: 0.7;">
+            <label>ID Movimiento (No editable)</label>
+            <input type="text" value="{{ item['ID_Movimiento'] }}" disabled>
+        </div>
+
+        <div class="form-group">
+            <label for="Fecha">Fecha</label>
+            <input type="date" name="Fecha" id="Fecha" value="{{ item['Fecha'] }}" required>
+        </div>
+        <div class="form-group">
+            <label for="Nombre_Producto">Nombre del Producto</label>
+            <input type="text" name="Nombre_Producto" id="Nombre_Producto" value="{{ item['Nombre_Producto'] }}"
+                required>
+        </div>
+        <div class="form-group">
+            <label for="Categoria">Categoría</label>
+            <input type="text" name="Categoria" id="Categoria" value="{{ item['Categoria'] }}" required>
+        </div>
+        <div class="form-group">
+            <label for="Tipo_Movimiento">Tipo de Movimiento</label>
+            <input type="text" name="Tipo_Movimiento" id="Tipo_Movimiento" value="{{ item['Tipo_Movimiento'] }}"
+                required>
+        </div>
+        <div class="form-group">
+            <label for="Cantidad">Cantidad</label>
+            <input type="number" name="Cantidad" id="Cantidad" value="{{ item['Cantidad'] }}" required>
+        </div>
+        <div class="form-group">
+            <label for="Precio_Unitario">Precio Unitario ($)</label>
+            <input type="number" step="0.01" name="Precio_Unitario" id="Precio_Unitario"
+                value="{{ item['Precio_Unitario'] }}" required>
+        </div>
+        <div class="form-group">
+            <label for="Vendedor">Vendedor</label>
+            <input type="text" name="Vendedor" id="Vendedor" value="{{ item['Vendedor'] }}" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary"
+            style="margin-top: 10px; padding: 12px; font-size: 1rem;">Actualizar Registro</button>
+    </form>
+</div>
+{% endblock %}
